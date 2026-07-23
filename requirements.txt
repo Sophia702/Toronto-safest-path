@@ -3,8 +3,9 @@ networkx
 pandas
 geopandas
 geopy
-folium
-streamlit
-streamlit-searchbox
 certifi
 scikit-learn
+fastapi
+uvicorn
+pydantic
+httpx

@@ -204,17 +204,21 @@ def attach_safety_weights(graph, crime_df=None, traffic_df=None, avoid_dark: boo
 
         # Unbounded, per-meter routing weight for Dijkstra. compute_safety_score
         # (src/scoring.py) is a separate, clamped 0-100 formula meant only for
-        # the whole-route display score in app.py - it must not be reused here,
-        # since its distance term is scaled for a whole trip in km and its
-        # clamp would make very different edges indistinguishable.
+        # the whole-route display score - it must not be reused here, since its
+        # distance term is scaled for a whole trip in km and its clamp would
+        # make very different edges indistinguishable.
         data["cost"] = data["length"] + data["crime_penalty"] + data["traffic_penalty"] + data["lighting_penalty"]
 
     return graph
 
 
-def find_route(graph, start_coord: Tuple[float, float], end_coord: Tuple[float, float], avoid_dark: bool = False):
-    """Find a route between two coordinates using a safety-weighted graph."""
-    graph = attach_safety_weights(graph, avoid_dark=avoid_dark)
+def find_route(graph, start_coord: Tuple[float, float], end_coord: Tuple[float, float]):
+    """Find a route between two coordinates using an already safety-weighted graph.
+
+    The caller is responsible for weighting (attach_safety_weights) - this lets
+    callers cache a weighted graph across requests instead of re-running the
+    crime/traffic binning pass on every call.
+    """
     start_node = ox.distance.nearest_nodes(graph, start_coord[1], start_coord[0])
     end_node = ox.distance.nearest_nodes(graph, end_coord[1], end_coord[0])
     if start_node == end_node:
