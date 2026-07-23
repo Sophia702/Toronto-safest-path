@@ -1,53 +1,49 @@
-# Toronto Safest Path MVP
+# Toronto Safest Path
 
-A simple walking-focused prototype for finding a safer route in Toronto from one address to another.
+A walking-directions app for Toronto that scores routes for safety instead of just picking the shortest path. Give it a start and end address and it builds a live pedestrian graph from OpenStreetMap, weights every block using Toronto's crime and traffic data, and returns a route along with a 0-100 safety score and a short explanation of why it took that path.
 
 ## Structure
 
-- `data/` contains the Toronto crime and traffic datasets
-- `src/geocoding.py` geocodes addresses via Nominatim, with Toronto-bounded search and address autocomplete
-- `src/routing.py` builds the walking graph and computes safety-weighted routes
-- `src/scoring.py` computes the 0-100 safety score and a short explanation
-- `src/app.py` provides a Streamlit UI (address autocomplete, avoid-dark toggle, route map)
-- `tests/` unit tests for geocoding, routing, and scoring
-- `cache/` local geocoding/graph cache (gitignored, rebuilds automatically)
+- `src/geocoding.py` - address search/autocomplete via Nominatim, bounded to Toronto
+- `src/routing.py` - builds the walk graph and computes safety-weighted routes
+- `src/scoring.py` - turns route penalties into a 0-100 score and explanation
+- `src/app.py` - Streamlit UI
+- `tests/` - unit tests
+- `data/` - Toronto crime and traffic datasets
+- `cache/` - local geocoding/graph cache (gitignored, rebuilds automatically)
 
-## Run locally
+## How the routing works
+
+Each street segment gets a cost based on its length plus three penalties: crime risk, vehicle traffic risk, and (optionally) how well it's lit. Crime and traffic counts are binned geographically and ranked by percentile against the rest of the city rather than compared to a fixed threshold, so "high crime" means something consistent whether you're downtown or in a quiet residential pocket.
+
+One thing worth calling out: vehicle traffic and foot/bike traffic are treated as opposites. Cars, trucks, and buses count against a route as a pedestrian hazard. Pedestrian and bike volume does the opposite - it discounts nearby crime risk, on the theory that busier sidewalks mean more people around to notice trouble. Earlier these were lumped into one "traffic" number, which meant a busy commercial street with lots of foot traffic got penalized the same as a busy arterial road. Splitting them by data column fixed that.
+
+Once the graph is weighted, Dijkstra finds the lowest-cost path. That per-edge cost is unbounded so risk stays differentiated even on long routes, while the score shown to the user is a separate, bounded 0-100 formula - crime and traffic penalties are blended (55/45) rather than summed, since summing could blow past 100 even when neither factor was at its worst alone. The score is then rescaled onto a 15-100 range so nothing ever displays as a literal 0.
+
+## Tech stack
+
+OSMnx + NetworkX for routing, pandas/GeoPandas for the crime and traffic data, geopy (Nominatim) for geocoding, Streamlit + Folium for the UI.
+
+## Getting started
 
 ```bash
 pip install -r requirements.txt
 streamlit run src/app.py
 ```
 
-## Current state
+## Tests
 
-- Address input uses live autocomplete (`search_addresses`) against Nominatim, bounded to a Toronto
-  viewbox, with a `GeocodingServiceError` surfaced in the UI if the service is unreachable.
-- Routing weights each street edge by crime risk, vehicle-traffic risk, and (optionally) lighting,
-  then runs Dijkstra over that combined cost to pick a route:
-  - Crime risk is a percentile-ranked count of nearby assault/robbery incidents (2020+), discounted
-    in areas with heavy foot/bike traffic (more people around = more "eyes on the street").
-  - Traffic risk is now vehicle-only (cars, trucks, buses) — pedestrian and bike volume no longer
-    counts against a route, since it isn't a pedestrian hazard the way vehicle traffic is.
-  - Lighting penalty only applies when "Avoid dark streets" is checked.
-- The route's average penalties are blended into a single 0-100 safety score for display, rescaled
-  onto a `[15, 100]` floor so nothing reads as a literal 0.
-- Unit tests cover the scoring formula, the routing cost formula, and geocoding edge cases (empty
-  input, service failures).
+```bash
+python -m unittest discover -s tests -v
+```
 
-## Known gaps / next steps
+## What's not done yet
 
-- No integration test exercises `find_route` end-to-end against real (or fixture) crime/traffic data
-  — only `attach_safety_weights` is tested directly with a synthetic 2-node graph.
-- The safety score and routing cost formulas are heuristic and untuned against any ground truth
-  (e.g. real pedestrian incident data); weights like the 0.55/0.45 crime/traffic blend are guesses,
-  not calibrated.
-- `build_walk_graph` downloads the full Toronto walk network from OSM on every request with no
-  persistent on-disk graph cache, which makes first-route latency high; only geocoding results are
-  cached in-process.
-- No route alternatives are offered — the UI shows a single shortest-safety-cost path with no way to
-  compare it against the plain-shortest-distance route.
-- No automated CI (lint/test) is configured yet; tests are run manually via `python -m unittest`.
+- No end-to-end test for `find_route` itself - only `attach_safety_weights` is tested directly, against a synthetic graph
+- The score weights (like the 0.55/0.45 blend) are hand-picked, not calibrated against any real outcome data
+- The OSM walk graph is rebuilt from scratch on every request - no persistent on-disk cache
+- Only one route is shown; no way to compare safest vs. shortest side by side
+- No CI running the tests on push
 
 ## MVP goals
 
@@ -56,9 +52,3 @@ streamlit run src/app.py
 - Return a safety score
 - Show a short explanation
 - Support an optional dark-street avoidance toggle
-
-## Tests
-
-```bash
-python -m unittest discover -s tests -v
-```
