@@ -5,3 +5,6 @@ geopandas
 geopy
 folium
 streamlit
+streamlit-searchbox
+certifi
+scikit-learn

@@ -12,3 +12,6 @@ venv/
 # Large local data files
 data/*.csv
 data/raw/
+
+# osmnx/geocoding cache
+cache/
